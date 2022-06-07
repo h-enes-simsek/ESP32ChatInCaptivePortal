@@ -9,4 +9,4 @@ I thought it will be an interesting idea to create a publicly accessible chat vi
 
 ## Documentation
 ### Sequence Diagram
-![seq-diagram](docs/ServerClientSeqDiagram.jpg)
+![seq-diagram](docs/SeqDiagram.jpg)
