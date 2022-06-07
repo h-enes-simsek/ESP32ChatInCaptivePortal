@@ -8,5 +8,5 @@ I thought it will be an interesting idea to create a publicly accessible chat vi
 - [ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer) (for webserver and websocket)
 
 ## Documentation
-# Sequence Diagram
+### Sequence Diagram
 ![seq-diagram](docs/ServerClientSeqDiagram.png)
