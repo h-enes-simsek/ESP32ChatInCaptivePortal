@@ -10,6 +10,7 @@
 
 #include <SPIFFS.h>
 
+/*
 String readFile(fs::FS &fs, const char * path){
   //Serial.printf("Reading file: %s\r\n", path);
   File file = fs.open(path, "r");
@@ -26,6 +27,7 @@ String readFile(fs::FS &fs, const char * path){
   //Serial.println(fileContent);
   return fileContent;
 }
+*/
 
 void writeFile(fs::FS &fs, const char * path, const char * message){
   //Serial.printf("Writing file: %s\r\n", path);
@@ -34,13 +36,13 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
     //Serial.println("- failed to open file for writing");
     return;
   }
-  /*
+  
   if(file.print(message)){
-    Serial.println("- file written");
+    //Serial.println("- file written");
   } else {
-    Serial.println("- write failed");
+    //Serial.println("- write failed");
   }
-  */
+  
   file.close();
 }
 

@@ -6,6 +6,7 @@
 */
 
 #include <WiFi.h>
+#include <DNSServer.h> // captive portal based on dns 
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
@@ -32,13 +33,36 @@ const char* password = "";
 // a user cannot type more than INCOMING_MSG_BUFFER_SIZE in textarea
 #define RESTRICT_USER_INPUT 
 
-// where to save incoming messages with SPIFFS, data format: "{json_1}{json_2}{json_3}..."
+// where to save incoming messages with SPIFFS, data format: {json_1}{json_2}{json_3}...
 #define FILE_NAME_FOR_MSGS_IN_JSON "/stored_msgs_in_json.txt" 
 
+DNSServer dnsServer;
 AsyncWebServer server(80); // Create AsyncWebServer object on port 80
 AsyncWebSocket ws("/ws"); // web socket
 
 char bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE]; // buffer for incoming messages
+
+class CaptiveRequestHandler : public AsyncWebHandler {
+public:
+  CaptiveRequestHandler() {}
+  virtual ~CaptiveRequestHandler() {}
+
+  bool canHandle(AsyncWebServerRequest *request){
+    //request->addInterestingHeader("ANY");
+    //Serial.println("handlling");
+    return true;
+  }
+
+  void handleRequest(AsyncWebServerRequest *request) {
+    /* Just to note: Accessing http headers not possible here because of inferior web server lib */
+    // all pages except /
+    if(request->url() != "/")
+    {
+      // Serial.println("captive page redirect");
+      request->send_P(200, "text/html", index_html);
+    }
+  }
+};
 
 // modify html page variable OUTGOING_MSG_BUFFER_SIZE before serve
 String processor(const String& var)
@@ -50,6 +74,19 @@ String processor(const String& var)
   return String();
 }
 
+bool isCurlyBracketExist(const char* text)
+{
+  int i = 0;
+  while(text[i] != NULL)
+  {
+    if(text[i] == '}')
+      return true;
+    else  
+      i++;
+  }  
+  return false;
+}
+
 void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
@@ -59,7 +96,7 @@ void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *da
     if(len > INCOMING_MSG_BUFFER_SIZE)
     {
       String msgToSend = "Incoming msg size is greater than INCOMING_MSG_BUFFER_SIZE, size: " + String(len); 
-      Serial.println(msgToSend);
+      //Serial.println(msgToSend);
       ws.text(client->id(), msgToSend); // notify client
 
       // truncate incoming msg (this may result incorrectly formatted buffer but will be handled by json parser)
@@ -98,7 +135,18 @@ void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *da
       return;
     }
 
-    // part 3: erase stored msgs if requested
+    // part 4: char '}' is reserved for parsing when stored msgs are sent to newly connected client
+    bool isExist1 = isCurlyBracketExist(dateJSON);
+    bool isExist2 = isCurlyBracketExist(nameJSON);
+    bool isExist3 = isCurlyBracketExist(textJSON);
+    if(isExist1 || isExist2 || isExist3)
+    {
+      Serial.println("You cannot use } in your msg");
+      ws.text(client->id(), "You cannot use } in your msg"); // notify client
+      return;
+    }
+
+    // part 5: erase stored msgs if requested
 #ifdef SPECIAL_TEXT_TO_CLEAR_FLASH
     const char* text_to_delete = SPECIAL_TEXT_TO_CLEAR_FLASH;
     if(text_to_delete != NULL)
@@ -117,16 +165,17 @@ void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *da
           Serial.println(F("Flash cannot be erased.")); 
           ws.text(client->id(), "flash cannot be erased");
         }
-          
+
+        return; // do not save this meesage to flash and do not send this message to all clients
       }
     }
 #endif
      
-    // part 4: save msg to flash
+    // part 6: save msg to flash
     writeFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON, bufferIncomingMessages);
-    Serial.printf("Stored data in flash:%s\n", bufferIncomingMessages); // debug 
+    //Serial.printf("Stored data in flash:%s\n", bufferIncomingMessages); // debug 
 
-    // part 5: send msg to clients connected (TODO: if msg size > limit this code will not work well)
+    // part 7: send msg to clients connected (TODO: if msg size > limit this code will not work well)
     // wrap incoming message with [ ] and add \0 because my outgoing json format should be [{obj1},{obj2},{obj3},...]
     bufferIncomingMessages[0] = '[';
     bufferIncomingMessages[len+1] = ']';
@@ -134,8 +183,51 @@ void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *da
     memcpy(bufferIncomingMessages+1, data, len); // string:"[<incoming_msg>]" with \0
     
     ws.textAll((char*)bufferIncomingMessages); // send incoming msg to all clients connected
-    Serial.printf("Outgoing data to clients:%s\n", bufferIncomingMessages); // debug
+    //Serial.printf("Outgoing data to clients:%s\n", bufferIncomingMessages); // debug
   }
+}
+
+
+// send previously stored messages to client newly connected
+void sendPreviousMessages(AsyncWebSocketClient *client)
+{
+  File file = SPIFFS.open(FILE_NAME_FOR_MSGS_IN_JSON, "r");
+  if(!file || file.isDirectory()){
+    Serial.println("could not send stored data because flash is empty");
+    return;
+  }
+  char bufferOutgoingMessages[INCOMING_MSG_BUFFER_SIZE];
+  bufferOutgoingMessages[0] = '[';
+  int i = 0;
+  Serial.println("Stored msgs will be send to client connected");
+  // parse stored data as {json1}{json1}{json1}
+  int counter = 0;
+  while(file.available()){
+    i = i + 1;
+    char c = (char)file.read();
+    //Serial.println(int(c));
+    //Serial.println(c);
+    bufferOutgoingMessages[i] = c;
+    if(c == '}')
+    {
+      counter++;
+      bufferOutgoingMessages[i+1] = ']';
+      bufferOutgoingMessages[i+2] = '\0';
+      //Serial.println((char*)bufferOutgoingMessages);
+      ws.text(client->id(), (char*)bufferOutgoingMessages);
+      
+      //delay(1000); // too many connection attemp causes kernel failure
+      if(counter == 20)
+      {
+         file.close();
+         return;
+      }
+      i = 0;
+    }
+    
+  }
+  
+  file.close();
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
@@ -143,6 +235,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   switch (type) {
     case WS_EVT_CONNECT:
       Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      sendPreviousMessages(client);
       break;
     case WS_EVT_DISCONNECT:
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
@@ -171,14 +264,25 @@ void setup(){
   }
 
   WiFi.softAP(ssid, password);
-  IPAddress myIP = WiFi.softAPIP();
+  delay(100); // softAPConfig not working sometimes without wait
+  
+  // VERY IMPORTANT:
+  // In order to open captive page automatically in android
+  // we need to use other than private ips like 192.168.x.x
+  // default ip is 192.168.4.1 so wee need to configure 
+  
+  IPAddress Ip(11,45,0,1);
+  IPAddress NMask(255, 255, 255, 0);
+  bool isConfigured = WiFi.softAPConfig(Ip, Ip, NMask);
+  Serial.println(isConfigured);
+  
   Serial.print("AP IP address: ");
-  Serial.println(myIP);
+  Serial.println(WiFi.softAPIP());
 
-  // Print ESP Local IP Address
-  Serial.println(WiFi.localIP());
+  dnsServer.start(53, "*", WiFi.softAPIP()); // forward all dns requests to esp's ip
 
   initWebSocket();
+  server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER); // only when requested from AP
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -187,7 +291,6 @@ void setup(){
 #else
     request->send_P(200, "text/html", index_html);
 #endif
-    
   });
 
   // Start server
@@ -195,6 +298,7 @@ void setup(){
 }
 
 void loop() {
+  dnsServer.processNextRequest();
   ws.cleanupClients();
   //String a = readFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON);
   //delay(15000);
