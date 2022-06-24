@@ -6,12 +6,14 @@ I thought it will be an interesting idea to create a publicly accessible chat vi
 
 ## Requirements
 - [ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer) (for webserver and websocket)
+- SPIFFS
+- [ArduinoJson](https://arduinojson.org/) (to parse json string)
 
 ## Installation
-- Change maximum limit of message number in queue in AsyncWebSocket.h, you cannot send number of stored messages to newly connected client more than this limit. Current limit is so low, 8 or 32. 
+- Change the maximum limit of message number in the queue in AsyncWebSocket.h, you cannot send the number of stored messages to the newly connected client more than this limit. The current limit is so low, 8 or 32. 
 
 ```
-#define WS_MAX_QUEUED_MESSAGES 500 // send up to 500 previously stored message to newly connected clients
+#define WS_MAX_QUEUED_MESSAGES 500 // send up to 500 previously stored messages to newly connected clients
 ```
 
 - (Optional) You can set configurable things as you desire in chatAppInCaptivePortal.ino
@@ -28,9 +30,9 @@ const char* password = "";
 
 // -- configurable parameters -->
 ```
-For example choice a special message to erase flash (not program, only stored messages) 
+For example choose a special message to erase flash (not program, only stored messages) 
 
-- (Optional) If you wish to modify html page, only index.h will be considered by compiler. Just change index.html and look what happens with a browser, then copy paste codes to index.h
+- (Optional) If you wish to modify html page, only index.h will be considered by compiler. Just change index.html and look what happens with a browser, then copy-paste codes to index.h
 
 ## Secreenshots
 ![ss](docs/SS.jpg)
@@ -38,3 +40,11 @@ For example choice a special message to erase flash (not program, only stored me
 ## Documentation
 ### Sequence Diagram
 ![seq-diagram](docs/SeqDiagram.jpg)
+
+## Notable Features
+- Connected clients can chat each other on a html page.
+- It works on captive portal page with dns redirecting.
+- Newly connected clients receive previous messages from other clients. (max limit must be configured because current limit is so low)
+- If server gets the special text defined as preprocessor like "erase_flash", it will erase stored messages.
+- Client's message size limit is configurable. However, it may be suppressed by websocket lib. If a client sends a message bigger than this limit, it will be warned by server.
+- Max message size is restricted in html page of client. Textarea maxlimit is controlled by the server. 
