@@ -8,6 +8,7 @@ I thought it will be an interesting idea to create a publicly accessible chat vi
 - [ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer) (for webserver and websocket)
 - SPIFFS
 - [ArduinoJson](https://arduinojson.org/) (to parse json string)
+- (optional) [websocket_server](https://github.com/Pithikos/python-websocket-server) (for python scripts to test html page)
 
 ## Installation
 - Change the maximum limit of message number in the queue in AsyncWebSocket.h, you cannot send the number of stored messages to the newly connected client more than this limit. The current limit is so low, 8 or 32. 
@@ -48,3 +49,4 @@ For example choose a special message to erase flash (not program, only stored me
 - If server gets the special text defined as preprocessor like "erase_flash", it will erase stored messages.
 - Client's message size limit is configurable. However, it may be suppressed by websocket lib. If a client sends a message bigger than this limit, it will be warned by server.
 - Max message size is restricted in html page of client. Textarea maxlimit is controlled by the server. 
+- There are python websocket server scripts to test html pages without connecting esp32
