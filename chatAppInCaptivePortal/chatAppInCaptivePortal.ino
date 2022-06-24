@@ -297,7 +297,7 @@ void setup(){
 void loop() {
   dnsServer.processNextRequest();
   ws.cleanupClients();
-  String a = readFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON);
-  Serial.println(a);
-  delay(15000);
+  //String a = readFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON);
+  //Serial.println(a);
+  //delay(15000);
 }

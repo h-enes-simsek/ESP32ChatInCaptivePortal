@@ -152,6 +152,10 @@
     let textToSend = document.getElementById("sendToChat").value; 
     document.getElementById("sendToChat").value = ""; // clear textarea 
     
+    // erase new line
+    username = username.replace(/(\r\n|\n|\r)/gm, "");
+    textToSend = textToSend.replace(/(\r\n|\n|\r)/gm, "");
+    
     let date = getDate();
     let jsonToSend = {
       "date": date,
