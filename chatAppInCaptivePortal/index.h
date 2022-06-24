@@ -116,7 +116,11 @@ const char index_html[] PROGMEM = R"rawliteral(
   })
 
   // Create WebSocket connection.
-  const socket = new WebSocket(`ws://${window.location.hostname}/ws`);
+  let host_name = window.location.hostname;
+  if(host_name == "")
+    host_name = "127.0.0.1" // for debug purpose (websocket test python files were configured to work in localhost)
+  
+  const socket = new WebSocket("ws://"+ host_name +"/ws");
   
   // Connection opened
   /*
