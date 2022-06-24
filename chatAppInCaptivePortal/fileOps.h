@@ -10,7 +10,7 @@
 
 #include <SPIFFS.h>
 
-/*
+// used only for debug
 String readFile(fs::FS &fs, const char * path){
   //Serial.printf("Reading file: %s\r\n", path);
   File file = fs.open(path, "r");
@@ -27,7 +27,7 @@ String readFile(fs::FS &fs, const char * path){
   //Serial.println(fileContent);
   return fileContent;
 }
-*/
+
 
 void writeFile(fs::FS &fs, const char * path, const char * message){
   //Serial.printf("Writing file: %s\r\n", path);

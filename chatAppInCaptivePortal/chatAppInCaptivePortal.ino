@@ -40,7 +40,17 @@ DNSServer dnsServer;
 AsyncWebServer server(80); // Create AsyncWebServer object on port 80
 AsyncWebSocket ws("/ws"); // web socket
 
-char bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE]; // buffer for incoming messages
+char bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE + 3]; // buffer for incoming messages, +3 is for '[', ']', '\0'
+
+// modify html page variable OUTGOING_MSG_BUFFER_SIZE before serve
+String processor(const String& var)
+{
+  if(var == "OUTGOING_MSG_BUFFER_SIZE")
+  {
+    return String(INCOMING_MSG_BUFFER_SIZE);
+  }
+  return String();
+}
 
 class CaptiveRequestHandler : public AsyncWebHandler {
 public:
@@ -55,24 +65,13 @@ public:
 
   void handleRequest(AsyncWebServerRequest *request) {
     /* Just to note: Accessing http headers not possible here because of inferior web server lib */
-    // all pages except /
-    if(request->url() != "/")
-    {
-      // Serial.println("captive page redirect");
-      request->send_P(200, "text/html", index_html);
-    }
+#ifdef RESTRICT_USER_INPUT
+    request->send_P(200, "text/html", index_html, processor);
+#else
+    request->send_P(200, "text/html", index_html);
+#endif
   }
 };
-
-// modify html page variable OUTGOING_MSG_BUFFER_SIZE before serve
-String processor(const String& var)
-{
-  if(var == "OUTGOING_MSG_BUFFER_SIZE")
-  {
-    return String(INCOMING_MSG_BUFFER_SIZE);
-  }
-  return String();
-}
 
 bool isCurlyBracketExist(const char* text)
 {
@@ -98,12 +97,7 @@ void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *da
       String msgToSend = "Incoming msg size is greater than INCOMING_MSG_BUFFER_SIZE, size: " + String(len); 
       //Serial.println(msgToSend);
       ws.text(client->id(), msgToSend); // notify client
-
-      // truncate incoming msg (this may result incorrectly formatted buffer but will be handled by json parser)
-      bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE-3] = '"'; // manually added "} at the end of msg
-      bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE-2] = '}'; // manually added "} at the end of msg
-      bufferIncomingMessages[INCOMING_MSG_BUFFER_SIZE-1] = 0; // added null terminator 
-      memcpy(bufferIncomingMessages, data, INCOMING_MSG_BUFFER_SIZE-3); // string:<incoming_msg> + \0 = {...} + \0 
+      return;
     }
     else
     {
@@ -196,12 +190,11 @@ void sendPreviousMessages(AsyncWebSocketClient *client)
     Serial.println("could not send stored data because flash is empty");
     return;
   }
-  char bufferOutgoingMessages[INCOMING_MSG_BUFFER_SIZE];
+  char bufferOutgoingMessages[INCOMING_MSG_BUFFER_SIZE + 3];
   bufferOutgoingMessages[0] = '[';
   int i = 0;
   Serial.println("Stored msgs will be send to client connected");
   // parse stored data as {json1}{json1}{json1}
-  int counter = 0;
   while(file.available()){
     i = i + 1;
     char c = (char)file.read();
@@ -210,18 +203,19 @@ void sendPreviousMessages(AsyncWebSocketClient *client)
     bufferOutgoingMessages[i] = c;
     if(c == '}')
     {
-      counter++;
+      //Serial.println("-------------i: " + String(i));
       bufferOutgoingMessages[i+1] = ']';
       bufferOutgoingMessages[i+2] = '\0';
+      //Serial.println("\n\n\n");
       //Serial.println((char*)bufferOutgoingMessages);
-      ws.text(client->id(), (char*)bufferOutgoingMessages);
       
-      //delay(1000); // too many connection attemp causes kernel failure
-      if(counter == 20)
-      {
-         file.close();
-         return;
-      }
+      bool isOk = ws.availableForWrite(client->id());
+      if(isOk)
+        ws.text(client->id(), (char*)bufferOutgoingMessages);
+      else
+        Serial.println("server is busy");
+       
+      
       i = 0;
     }
     
@@ -284,6 +278,8 @@ void setup(){
   initWebSocket();
   server.addHandler(new CaptiveRequestHandler()).setFilter(ON_AP_FILTER); // only when requested from AP
 
+  // CaptiveRequestHandler will handle all request
+  /*
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
 #ifdef RESTRICT_USER_INPUT
@@ -292,6 +288,7 @@ void setup(){
     request->send_P(200, "text/html", index_html);
 #endif
   });
+  */
 
   // Start server
   server.begin();
@@ -300,6 +297,7 @@ void setup(){
 void loop() {
   dnsServer.processNextRequest();
   ws.cleanupClients();
-  //String a = readFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON);
-  //delay(15000);
+  String a = readFile(SPIFFS, FILE_NAME_FOR_MSGS_IN_JSON);
+  Serial.println(a);
+  delay(15000);
 }
